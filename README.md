@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Component Explorer
 
-## Getting Started
+Explore design system components in the context of real mobile screens.
 
-First, run the development server:
+- **Explorer:** every screen as a live, scaled-down phone.
+- **Screen:** use it live, switch to **Inspect** to outline and pick any component, or flip to **Code** to read the source of the screen and every component it uses.
+- **Component:** the component on its own as a working demo, with its code, reached through breadcrumbs (Explorer / Screen / Component).
+
+Built with Next.js, React, Tailwind and GSAP. The code view reads the real `.tsx` files at build time and highlights them with Shiki. The locked-card frost is a WebGL shader ([FrostOverlay.tsx](src/ds/components/FrostOverlay.tsx)).
+
+## Run it
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Shortcuts: `1` interact, `2` inspect, `3` code, `Esc` up one level.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Layout
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/ds/components/` — design system components. Each root carries `data-ds="<slug>"`, which is how Inspect finds them.
+- `src/ds/screens/` — screens composed from those components.
+- `src/explorer/registry.ts` — screen and component metadata.
+- `src/explorer/renderers.tsx` — maps slugs to screens and isolated demos.
 
-## Learn More
+To add a component: create it in `src/ds/components/`, add an entry in `registry.ts`, and add a demo in `renderers.tsx`.
 
-To learn more about Next.js, take a look at the following resources:
+## Static export
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`npm run build:sites` exports a static build to `out/` with a base path of `/chris-robinson/ds-explorer` for sites.metalab.com. Change `SITES_BASE_PATH` in `package.json` to host it elsewhere.

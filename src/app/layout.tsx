@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { NativeStyles } from "@/explorer/NativeStyles";
 import { Shell } from "@/explorer/Shell";
 import "./globals.css";
 
@@ -16,7 +17,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable} ${serif.variable} antialiased`}>
       <body>
-        <Shell>{children}</Shell>
+        <NativeStyles>
+          <Shell>{children}</Shell>
+        </NativeStyles>
       </body>
     </html>
   );

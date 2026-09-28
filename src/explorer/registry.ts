@@ -13,7 +13,8 @@ export type ComponentMeta = {
 export type ScreenMeta = {
   slug: string;
   title: string;
-  file: string;
+  /** Omitted for library galleries, which only show their components' source. */
+  file?: string;
   description: string;
   components: string[];
 };
@@ -24,6 +25,16 @@ const c = (slug: string, name: string, description: string, deps?: string[]): Co
   file: `src/ds/components/${name}.tsx`,
   description,
   deps,
+});
+
+// React Native components from the linked @nbk/ui package. Their demos come
+// from the package's own `<Name>.stories.tsx` files (see ./renderers.tsx).
+const nbk = (slug: string, name: string, description: string): ComponentMeta => ({
+  slug,
+  name,
+  file: `node_modules/@nbk/ui/src/${name}/${name}.tsx`,
+  description,
+  deps: [`node_modules/@nbk/ui/src/${name}/${name}.stories.tsx`],
 });
 
 export const components: Record<string, ComponentMeta> = Object.fromEntries(
@@ -46,6 +57,8 @@ export const components: Record<string, ComponentMeta> = Object.fromEntries(
     c("keypad", "Keypad", "Numeric entry pad with a press ripple."),
     c("button", "Button", "Full-width pill button with an elastic press."),
     c("transaction-row", "TransactionRow", "One line of account activity.", ["src/ds/components/Avatar.tsx"]),
+    nbk("nbk-button", "Button", "Primary or secondary action, with disabled and loading states."),
+    nbk("nbk-placeholder", "Placeholder", "Labelled block on the secondary background."),
   ].map((m) => [m.slug, m]),
 );
 
@@ -81,6 +94,12 @@ export const screens: ScreenMeta[] = [
     file: "src/ds/screens/Activity.tsx",
     description: "Filtered account activity, grouped by day.",
     components: ["sheet-header", "segmented-control", "section-label", "row-group", "transaction-row", "avatar"],
+  },
+  {
+    slug: "nbk",
+    title: "NBK components",
+    description: "Every story from the linked @nbk/ui React Native library.",
+    components: ["nbk-button", "nbk-placeholder"],
   },
 ];
 

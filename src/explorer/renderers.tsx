@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, type ComponentType } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
+import { View } from "react-native";
+import * as NbkButtonStories from "@nbk/ui/src/Button/Button.stories";
+import * as NbkPlaceholderStories from "@nbk/ui/src/Placeholder/Placeholder.stories";
 import { ExternalIcon, PanelIcon, UploadIcon } from "@/ds/icons";
 import { AccountDetails } from "@/ds/screens/AccountDetails";
 import { Activity } from "@/ds/screens/Activity";
@@ -21,11 +24,54 @@ import { Toggle } from "@/ds/components/Toggle";
 import { ToggleRow } from "@/ds/components/ToggleRow";
 import { TransactionRow } from "@/ds/components/TransactionRow";
 import { WalletCard } from "@/ds/components/WalletCard";
+import { components } from "./registry";
+import { storiesFrom, type Story } from "./stories";
+
+// Stories for the linked @nbk/ui components, keyed by registry slug. Adding a
+// component is one import of its stories file plus a line here.
+export const componentStories: Record<string, Story[]> = {
+  "nbk-button": storiesFrom(NbkButtonStories),
+  "nbk-placeholder": storiesFrom(NbkPlaceholderStories),
+};
+
+/** A component's default demo: its first story, else its hand-written demo. */
+export function demoFor(slug: string): ComponentType | undefined {
+  return componentStories[slug]?.[0]?.Render ?? componentDemos[slug];
+}
+
+/** Tags a React Native story so the inspect overlay can find it. */
+function Tagged({ slug, children }: { slug: string; children: ReactNode }) {
+  return <View dataSet={{ ds: slug }}>{children}</View>;
+}
+
+/** The NBK library's "screen": every story of every component, stacked. */
+function NbkGallery() {
+  return (
+    <div className="flex flex-col gap-10 px-5 pb-24 pt-14">
+      {Object.entries(componentStories).map(([slug, stories]) => (
+        <section key={slug}>
+          <h2 className="mb-4 text-[17px] font-semibold tracking-[-0.01em] text-ink">{components[slug].name}</h2>
+          <div className="flex flex-col gap-5">
+            {stories.map(({ id, name, Render }) => (
+              <div key={id}>
+                <p className="mb-2 text-[12px] font-medium text-ink-3">{name}</p>
+                <Tagged slug={slug}>
+                  <Render />
+                </Tagged>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
 
 export const screenRenderers: Record<string, ComponentType> = {
   "account-details": AccountDetails,
   "send-money": SendMoney,
   activity: Activity,
+  nbk: NbkGallery,
 };
 
 // Isolated, interactive demos for the component view.

@@ -3,32 +3,72 @@
 import { useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
+import { ComponentCanvas } from "./ComponentCanvas";
 import { screenRenderers } from "./renderers";
 import { components, screens } from "./registry";
 import { useShell } from "./Shell";
+import { setDrillFrom } from "./transition";
 
 gsap.registerPlugin(useGSAP);
 
 const THUMB_SCALE = 0.56;
 
 export function ExplorerHome() {
-  const { navigate } = useShell();
+  const { navigate, browse } = useShell();
   const root = useRef<HTMLDivElement>(null);
+  const shown = useRef(browse);
   const { contextSafe } = useGSAP(
     () => {
+      if (browse === "components") {
+        // Tiles surface in a scatter across the canvas.
+        shown.current = browse;
+        gsap.from(".card", { opacity: 0, scale: 0.96, filter: "blur(8px)", stagger: { amount: 0.5, from: "random" }, duration: 0.6, ease: "power3.out" });
+        return;
+      }
+      if (shown.current !== browse) {
+        // Switching back from the canvas: just bring the screen cards in.
+        shown.current = browse;
+        gsap.from(".card", { y: 32, opacity: 0, filter: "blur(8px)", stagger: 0.04, duration: 0.6, ease: "power3.out" });
+        return;
+      }
       gsap
         .timeline({ defaults: { ease: "power3.out" } })
         .from(".intro > *", { y: 16, opacity: 0, stagger: 0.07, duration: 0.6 })
-        .from(".screen-card", { y: 48, opacity: 0, filter: "blur(8px)", stagger: 0.09, duration: 0.8 }, 0.1)
+        .from(".card", { y: 48, opacity: 0, filter: "blur(8px)", stagger: 0.09, duration: 0.8 }, 0.1)
         .from(".chip", { y: 10, opacity: 0, stagger: 0.015, duration: 0.4 }, 0.45);
     },
-    { scope: root },
+    { scope: root, dependencies: [browse] },
   );
 
   const hover = contextSafe((el: HTMLElement, on: boolean) => {
     gsap.to(el.querySelector(".thumb"), { y: on ? -8 : 0, duration: 0.5, ease: "power3.out" });
     gsap.to(el.querySelector(".thumb-shadow"), { opacity: on ? 1 : 0, duration: 0.5 });
   });
+
+  const openComponent = (slug: string, tile: HTMLElement) => {
+    const home = screens.find((s) => s.components.includes(slug));
+    if (!home) return;
+    // Grow the component stage out of this tile, as drilling in from a screen does.
+    const rect = tile.getBoundingClientRect();
+    setDrillFrom({ slug, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
+    navigate(`/${home.slug}/${slug}`);
+  };
+
+  const linkProps = (label: string, open: (el: HTMLElement) => void) => ({
+    role: "link",
+    tabIndex: 0,
+    "aria-label": label,
+    onClick: (e: React.MouseEvent<HTMLElement>) => open(e.currentTarget),
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => e.key === "Enter" && open(e.currentTarget),
+  });
+
+  if (browse === "components") {
+    return (
+      <div ref={root}>
+        <ComponentCanvas onOpen={openComponent} />
+      </div>
+    );
+  }
 
   return (
     <div ref={root} className="mx-auto max-w-[1080px] px-4 pb-24 pt-[108px]">
@@ -48,14 +88,10 @@ export function ExplorerHome() {
           return (
             <div
               key={s.slug}
-              role="link"
-              tabIndex={0}
-              aria-label={s.title}
-              onClick={() => navigate(`/${s.slug}`)}
-              onKeyDown={(e) => e.key === "Enter" && navigate(`/${s.slug}`)}
+              {...linkProps(s.title, () => navigate(`/${s.slug}`))}
               onPointerEnter={(e) => hover(e.currentTarget, true)}
               onPointerLeave={(e) => hover(e.currentTarget, false)}
-              className="screen-card group flex cursor-pointer flex-col items-center text-left outline-none"
+              className="card group flex cursor-pointer flex-col items-center text-left outline-none"
             >
               <div className="thumb relative" style={{ width: 390 * THUMB_SCALE, height: 720 * THUMB_SCALE }}>
                 <div className="thumb-shadow absolute inset-0 rounded-[26px] opacity-0 shadow-[0_40px_60px_-30px_rgba(0,0,0,0.35)]" />
@@ -72,7 +108,7 @@ export function ExplorerHome() {
               <div className="mt-5 w-full px-1" style={{ maxWidth: 390 * THUMB_SCALE }}>
                 <div className="text-[14px] font-semibold">{s.title}</div>
                 <div className="mt-0.5 text-[12.5px] text-[var(--bar-muted)]">
-                  {s.components.length} components
+                  {s.components.length} {s.components.length === 1 ? "component" : "components"}
                 </div>
               </div>
             </div>

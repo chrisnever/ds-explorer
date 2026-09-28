@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { CodePanel, type CodeFile } from "./CodePanel";
 import { InspectOverlay } from "./InspectOverlay";
-import { componentDemos, screenRenderers } from "./renderers";
+import { componentDemos, componentStories, screenRenderers } from "./renderers";
 import { components, screenBySlug, screens } from "./registry";
 import { useShell } from "./Shell";
 import { setDrillFrom, takeDrillFrom } from "./transition";
@@ -139,7 +139,9 @@ function Phone({
 
 function ComponentStage({ screen, slug }: { screen: string; slug: string }) {
   const { navigate } = useShell();
-  const Demo = componentDemos[slug];
+  const stories = componentStories[slug];
+  const [storyId, setStoryId] = useState(stories?.[0]?.id);
+  const Demo = stories?.find((s) => s.id === storyId)?.Render ?? componentDemos[slug];
   const meta = components[slug];
   const usedIn = screens.filter((s) => s.components.includes(slug));
   const current = screenBySlug(screen);
@@ -154,6 +156,21 @@ function ComponentStage({ screen, slug }: { screen: string; slug: string }) {
       </div>
 
       <div className="stage-meta mt-8 flex max-w-[390px] flex-col items-center gap-3 px-4 text-center">
+        {stories && (
+          <div role="group" aria-label="Stories" className="flex flex-wrap justify-center gap-1.5 text-[12px]">
+            {stories.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                aria-pressed={s.id === storyId}
+                onClick={() => setStoryId(s.id)}
+                className="rounded-full bg-[var(--bar-bg)] px-2.5 py-1 font-medium shadow-[0_0_0_1px_var(--bar-ring)] transition-opacity hover:opacity-70 aria-pressed:opacity-100 aria-pressed:shadow-[0_0_0_1.5px_var(--bar-fg)]"
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="text-[13.5px] leading-relaxed text-[var(--bar-muted)]">{meta.description}</p>
         <div className="flex flex-wrap items-center justify-center gap-1.5 text-[12px]">
           <span className="text-[var(--bar-muted)]">Used in</span>

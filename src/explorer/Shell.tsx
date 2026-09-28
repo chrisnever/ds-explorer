@@ -11,9 +11,14 @@ gsap.registerPlugin(useGSAP);
 
 export type Mode = "preview" | "inspect" | "code";
 
+/** How the home page groups things: by screen, or one card per component. */
+export type Browse = "screens" | "components";
+
 type ShellContextValue = {
   mode: Mode;
   setMode: (mode: Mode) => void;
+  browse: Browse;
+  setBrowse: (browse: Browse) => void;
   /** Animates the current page out, then pushes the route. */
   navigate: (href: string) => void;
 };
@@ -52,6 +57,8 @@ export function Shell({ children }: { children: ReactNode }) {
   // and drops back to preview on navigation; code view sticks so you can
   // walk the breadcrumbs while reading source.
   const [chosen, setChosen] = useState<{ mode: Mode; path: string }>({ mode: "preview", path: pathname });
+  // Lives here rather than on the home page so it survives drilling in and back out.
+  const [browse, setBrowse] = useState<Browse>("screens");
   const root = useRef<HTMLDivElement>(null);
   const page = useRef<HTMLDivElement>(null);
   const leaving = useRef(false);
@@ -113,13 +120,13 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [up, isRoot, navigate, mode, setMode]);
 
   return (
-    <ShellContext.Provider value={{ mode: effectiveMode, setMode, navigate }}>
+    <ShellContext.Provider value={{ mode: effectiveMode, setMode, browse, setBrowse, navigate }}>
       <div
         ref={root}
         style={THEMES.light as React.CSSProperties}
         className="min-h-dvh bg-[var(--shell-bg)] text-[var(--bar-fg)]"
       >
-        <TopBar crumbs={crumbs} mode={effectiveMode} showModes={!isRoot} />
+        <TopBar crumbs={crumbs} mode={effectiveMode} showModes={!isRoot} showBrowse={isRoot} />
         <div ref={page} key={pathname}>
           {children}
         </div>

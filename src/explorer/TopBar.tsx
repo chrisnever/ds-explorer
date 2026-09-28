@@ -5,7 +5,7 @@ import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import type { Crumb } from "./registry";
 import { BackIcon, CodeIcon, InspectIcon, InteractIcon } from "./icons";
-import { useShell, type Mode } from "./Shell";
+import { useShell, type Browse, type Mode } from "./Shell";
 
 gsap.registerPlugin(useGSAP);
 
@@ -15,8 +15,15 @@ const MODES: { mode: Mode; label: string; key: string; Icon: typeof CodeIcon }[]
   { mode: "code", label: "View code", key: "3", Icon: CodeIcon },
 ];
 
-export function TopBar({ crumbs, mode, showModes }: { crumbs: Crumb[]; mode: Mode; showModes: boolean }) {
-  const { setMode, navigate } = useShell();
+const BROWSE: { value: Browse; label: string }[] = [
+  { value: "screens", label: "Screens" },
+  { value: "components", label: "Components" },
+];
+
+type TopBarProps = { crumbs: Crumb[]; mode: Mode; showModes: boolean; showBrowse: boolean };
+
+export function TopBar({ crumbs, mode, showModes, showBrowse }: TopBarProps) {
+  const { setMode, browse, setBrowse, navigate } = useShell();
   const root = useRef<HTMLElement>(null);
   const trail = crumbs.map((c) => c.label).join("/");
   const back = crumbs.at(-2);
@@ -60,6 +67,33 @@ export function TopBar({ crumbs, mode, showModes }: { crumbs: Crumb[]; mode: Mod
     { scope: root, dependencies: [mode], revertOnUpdate: false },
   );
 
+  useGSAP(
+    () => {
+      gsap.to(".browse", {
+        autoAlpha: showBrowse ? 1 : 0,
+        scale: showBrowse ? 1 : 0.9,
+        duration: 0.35,
+        ease: showBrowse ? "back.out(2)" : "power2.in",
+      });
+    },
+    { scope: root, dependencies: [showBrowse], revertOnUpdate: false },
+  );
+
+  useGSAP(
+    () => {
+      const active = root.current?.querySelector<HTMLElement>(`[data-browse="${browse}"]`);
+      if (active) {
+        gsap.to(".browse-thumb", {
+          x: active.offsetLeft,
+          width: active.offsetWidth,
+          duration: 0.4,
+          ease: "power3.out",
+        });
+      }
+    },
+    { scope: root, dependencies: [browse], revertOnUpdate: false },
+  );
+
   return (
     <header
       ref={root}
@@ -99,24 +133,47 @@ export function TopBar({ crumbs, mode, showModes }: { crumbs: Crumb[]; mode: Mod
         })}
       </nav>
 
-      <div className="modes invisible relative ml-auto flex shrink-0 gap-0.5 opacity-0">
-        <span className="mode-thumb absolute left-0 top-0 size-8 rounded-[9px] bg-[var(--bar-thumb)]" />
-        {MODES.map(({ mode: m, label, key, Icon }) => (
-          <button
-            key={m}
-            type="button"
-            data-mode={m}
-            aria-label={label}
-            aria-pressed={mode === m}
-            title={`${label}  ·  ${key}`}
-            onClick={() => setMode(m === mode && m !== "preview" ? "preview" : m)}
-            className={`relative grid size-8 place-items-center rounded-[9px] transition-colors ${
-              mode === m ? "text-[var(--bar-fg)]" : "text-[var(--bar-muted)] hover:text-[var(--bar-fg)]"
-            }`}
-          >
-            <Icon />
-          </button>
-        ))}
+      <div className="relative ml-auto flex shrink-0 justify-end">
+        <div
+          role="group"
+          aria-label="Browse by"
+          className="browse invisible absolute right-0 top-0 flex gap-0.5 opacity-0"
+        >
+          <span className="browse-thumb absolute left-0 top-0 h-8 rounded-[9px] bg-[var(--bar-thumb)]" />
+          {BROWSE.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              data-browse={value}
+              aria-pressed={browse === value}
+              onClick={() => setBrowse(value)}
+              className={`relative h-8 rounded-[9px] px-3 text-[13px] font-medium transition-colors ${
+                browse === value ? "text-[var(--bar-fg)]" : "text-[var(--bar-muted)] hover:text-[var(--bar-fg)]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="modes invisible relative flex shrink-0 gap-0.5 opacity-0">
+          <span className="mode-thumb absolute left-0 top-0 size-8 rounded-[9px] bg-[var(--bar-thumb)]" />
+          {MODES.map(({ mode: m, label, key, Icon }) => (
+            <button
+              key={m}
+              type="button"
+              data-mode={m}
+              aria-label={label}
+              aria-pressed={mode === m}
+              title={`${label}  ·  ${key}`}
+              onClick={() => setMode(m === mode && m !== "preview" ? "preview" : m)}
+              className={`relative grid size-8 place-items-center rounded-[9px] transition-colors ${
+                mode === m ? "text-[var(--bar-fg)]" : "text-[var(--bar-muted)] hover:text-[var(--bar-fg)]"
+              }`}
+            >
+              <Icon />
+            </button>
+          ))}
+        </div>
       </div>
     </header>
   );

@@ -11,10 +11,13 @@
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
+    "@nbk/tokens": "file:../../nbk-components/packages/tokens",
+    "@nbk/ui": "file:../../nbk-components/packages/ui",
     "gsap": "^3.15.0",
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-native-web": "^0.21.3",
     "server-only": "^0.0.1",
     "shiki": "^4.4.3"
   },
@@ -25,6 +28,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "react-native": "0.86.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

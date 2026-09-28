@@ -12,6 +12,9 @@ export default async function ScreenPage(props: PageProps<"/[screen]">) {
   const screen = screenBySlug(slug);
   if (!screen) notFound();
 
-  const files = await loadSources([screen.file, ...screen.components.map((c) => components[c].file)]);
+  const files = await loadSources([
+    ...(screen.file ? [screen.file] : []),
+    ...screen.components.map((c) => components[c].file),
+  ]);
   return <Viewer files={files} screen={screen.slug} />;
 }

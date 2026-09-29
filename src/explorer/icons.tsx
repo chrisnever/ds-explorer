@@ -32,6 +32,18 @@ export const CodeIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export const CommentIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M8 2.5c3.1 0 5.5 2.1 5.5 4.8S11.1 12 8 12c-.6 0-1.2-.1-1.7-.2L3 13.3l.9-2.6C3 9.8 2.5 8.6 2.5 7.3 2.5 4.6 4.9 2.5 8 2.5Z" />
+  </svg>
+);
+
+export const CloseIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="m4 4 8 8M12 4l-8 8" />
+  </svg>
+);
+
 export const BackIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base} {...p}>
     <path d="M10 3 5 8l5 5" />

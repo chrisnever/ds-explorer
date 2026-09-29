@@ -4,7 +4,7 @@ import { Fragment, useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import type { Crumb } from "./registry";
-import { BackIcon, CodeIcon, InspectIcon, InteractIcon } from "./icons";
+import { BackIcon, CodeIcon, CommentIcon, InspectIcon, InteractIcon } from "./icons";
 import { useShell, type Browse, type Mode } from "./Shell";
 
 gsap.registerPlugin(useGSAP);
@@ -20,9 +20,9 @@ const BROWSE: { value: Browse; label: string }[] = [
   { value: "components", label: "Components" },
 ];
 
-type TopBarProps = { crumbs: Crumb[]; mode: Mode; showModes: boolean; showBrowse: boolean };
+type TopBarProps = { crumbs: Crumb[]; mode: Mode; showModes: boolean; showComment: boolean; showBrowse: boolean };
 
-export function TopBar({ crumbs, mode, showModes, showBrowse }: TopBarProps) {
+export function TopBar({ crumbs, mode, showModes, showComment, showBrowse }: TopBarProps) {
   const { setMode, browse, setBrowse, navigate } = useShell();
   const root = useRef<HTMLElement>(null);
   const trail = crumbs.map((c) => c.label).join("/");
@@ -64,7 +64,7 @@ export function TopBar({ crumbs, mode, showModes, showBrowse }: TopBarProps) {
       const active = root.current?.querySelector<HTMLElement>(`[data-mode="${mode}"]`);
       if (active) gsap.to(".mode-thumb", { x: active.offsetLeft, duration: 0.4, ease: "power3.out" });
     },
-    { scope: root, dependencies: [mode], revertOnUpdate: false },
+    { scope: root, dependencies: [mode, showComment], revertOnUpdate: false },
   );
 
   useGSAP(
@@ -173,6 +173,24 @@ export function TopBar({ crumbs, mode, showModes, showBrowse }: TopBarProps) {
               <Icon />
             </button>
           ))}
+          {showComment && (
+            <>
+              <span aria-hidden className="mx-1 my-1.5 w-px bg-[var(--bar-ring)]" />
+              <button
+                type="button"
+                data-mode="comment"
+                aria-label="Comments"
+                aria-pressed={mode === "comment"}
+                title="Comments  ·  4"
+                onClick={() => setMode(mode === "comment" ? "preview" : "comment")}
+                className={`relative grid size-8 place-items-center rounded-[9px] transition-colors ${
+                  mode === "comment" ? "text-[var(--bar-fg)]" : "text-[var(--bar-muted)] hover:text-[var(--bar-fg)]"
+                }`}
+              >
+                <CommentIcon />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </header>

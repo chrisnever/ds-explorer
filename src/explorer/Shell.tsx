@@ -9,7 +9,7 @@ import { TopBar } from "./TopBar";
 
 gsap.registerPlugin(useGSAP);
 
-export type Mode = "preview" | "inspect" | "code";
+export type Mode = "preview" | "inspect" | "code" | "comment";
 
 /** How the home page groups things: by screen, or one card per component. */
 export type Browse = "screens" | "components";
@@ -53,9 +53,9 @@ const THEMES = {
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  // Mode remembers the route it was chosen on. Inspect is a transient tool
-  // and drops back to preview on navigation; code view sticks so you can
-  // walk the breadcrumbs while reading source.
+  // Mode remembers the route it was chosen on. Inspect and comment are
+  // transient tools and drop back to preview on navigation; code view sticks
+  // so you can walk the breadcrumbs while reading source.
   const [chosen, setChosen] = useState<{ mode: Mode; path: string }>({ mode: "preview", path: pathname });
   // Lives here rather than on the home page so it survives drilling in and back out.
   const [browse, setBrowse] = useState<Browse>("screens");
@@ -64,13 +64,16 @@ export function Shell({ children }: { children: ReactNode }) {
   const leaving = useRef(false);
   const crumbs = crumbsFor(pathname);
   const isRoot = crumbs.length === 1;
+  // Comments are on individual components, not whole screens.
+  const isComponent = crumbs.length === 3;
 
   useEffect(() => {
     leaving.current = false;
   }, [pathname]);
 
-  const mode: Mode = chosen.mode === "inspect" && chosen.path !== pathname ? "preview" : chosen.mode;
-  const effectiveMode: Mode = isRoot ? "preview" : mode;
+  const transient = chosen.mode === "inspect" || chosen.mode === "comment";
+  const mode: Mode = transient && chosen.path !== pathname ? "preview" : chosen.mode;
+  const effectiveMode: Mode = isRoot || (mode === "comment" && !isComponent) ? "preview" : mode;
   const setMode = useCallback((m: Mode) => setChosen({ mode: m, path: pathname }), [pathname]);
 
   useGSAP(
@@ -109,15 +112,20 @@ export function Shell({ children }: { children: ReactNode }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if ((e.target as HTMLElement)?.closest("input, textarea, [contenteditable]")) return;
-      if (e.key === "Escape" && up) navigate(up);
+      if (e.key === "Escape") {
+        // Leave comment mode before leaving the component.
+        if (effectiveMode === "comment") return setMode("preview");
+        if (up) navigate(up);
+      }
       if (isRoot) return;
       if (e.key === "1") setMode("preview");
       if (e.key === "2") setMode(mode === "inspect" ? "preview" : "inspect");
       if (e.key === "3") setMode(mode === "code" ? "preview" : "code");
+      if (e.key === "4" && isComponent) setMode(mode === "comment" ? "preview" : "comment");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [up, isRoot, navigate, mode, setMode]);
+  }, [up, isRoot, isComponent, navigate, mode, effectiveMode, setMode]);
 
   return (
     <ShellContext.Provider value={{ mode: effectiveMode, setMode, browse, setBrowse, navigate }}>
@@ -126,7 +134,13 @@ export function Shell({ children }: { children: ReactNode }) {
         style={THEMES.light as React.CSSProperties}
         className="min-h-dvh bg-[var(--shell-bg)] text-[var(--bar-fg)]"
       >
-        <TopBar crumbs={crumbs} mode={effectiveMode} showModes={!isRoot} showBrowse={isRoot} />
+        <TopBar
+          crumbs={crumbs}
+          mode={effectiveMode}
+          showModes={!isRoot}
+          showComment={isComponent}
+          showBrowse={isRoot}
+        />
         <div ref={page} key={pathname}>
           {children}
         </div>

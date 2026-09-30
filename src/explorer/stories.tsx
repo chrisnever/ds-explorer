@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType, ReactNode } from "react";
+import { createContext, useContext, type ComponentType, type ReactNode } from "react";
 
 // A small reader for Storybook's Component Story Format (CSF): the default
 // export describes the component, every other export is one story. Covers
@@ -10,6 +10,9 @@ type Args = Record<string, unknown>;
 type Context = { args: Args; name: string };
 type Render = (args: Args, context: Context) => ReactNode;
 type Decorator = (Story: ComponentType, context: Context) => ReactNode;
+
+/** Args to lay over a story's own, e.g. text edited on a draft screen. */
+export const StoryArgs = createContext<Args | null>(null);
 
 type Annotations = { args?: Args; render?: Render; decorators?: Decorator[] };
 type Meta = Annotations & {
@@ -22,7 +25,8 @@ type Meta = Annotations & {
 type StoryExport = (Annotations & { name?: string }) | (Render & Annotations & { storyName?: string });
 
 export type StoryModule = { default: Meta } & Record<string, unknown>;
-export type Story = { id: string; name: string; Render: ComponentType };
+/** `args` are the story's merged props, for generating usage code. */
+export type Story = { id: string; name: string; args: Args; Render: ComponentType };
 
 /**
  * Turns one stories file into renderable stories, in source order. The order
@@ -58,10 +62,12 @@ export function storiesFrom(mod: StoryModule): Story[] {
             return <>{decorate(Inner, context)}</>;
           },
         function Base() {
-          return <>{render(args, context)}</>;
+          const overrides = useContext(StoryArgs);
+          const merged = overrides ? { ...args, ...overrides } : args;
+          return <>{render(merged, { ...context, args: merged })}</>;
         },
       );
-      return { id: key, name, Render };
+      return { id: key, name, args, Render };
     });
 }
 

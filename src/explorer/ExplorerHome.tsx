@@ -4,7 +4,10 @@ import { useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { ComponentCanvas } from "./ComponentCanvas";
+import { createDraft, draftHref, useDrafts } from "./drafts";
+import { PlusIcon } from "./icons";
 import { screenRenderers } from "./renderers";
+import { DraftScreen } from "./ScreenBuilder";
 import { components, screens } from "./registry";
 import { useShell } from "./Shell";
 import { setDrillFrom } from "./transition";
@@ -15,6 +18,7 @@ const THUMB_SCALE = 0.56;
 
 export function ExplorerHome() {
   const { navigate, browse } = useShell();
+  const drafts = useDrafts();
   const root = useRef<HTMLDivElement>(null);
   const shown = useRef(browse);
   const { contextSafe } = useGSAP(
@@ -54,6 +58,9 @@ export function ExplorerHome() {
     navigate(`/${home.slug}/${slug}`);
   };
 
+  // A new screen is blank, so open it ready to build.
+  const newScreen = () => navigate(draftHref(createDraft().id), { mode: "build" });
+
   const linkProps = (label: string, open: (el: HTMLElement) => void) => ({
     role: "link",
     tabIndex: 0,
@@ -86,34 +93,49 @@ export function ExplorerHome() {
         {screens.map((s) => {
           const Screen = screenRenderers[s.slug];
           return (
-            <div
+            <ScreenCard
               key={s.slug}
+              title={s.title}
+              detail={`${s.components.length} ${s.components.length === 1 ? "component" : "components"}`}
               {...linkProps(s.title, () => navigate(`/${s.slug}`))}
               onPointerEnter={(e) => hover(e.currentTarget, true)}
               onPointerLeave={(e) => hover(e.currentTarget, false)}
-              className="card group flex cursor-pointer flex-col items-center text-left outline-none"
             >
-              <div className="thumb relative" style={{ width: 390 * THUMB_SCALE, height: 720 * THUMB_SCALE }}>
-                <div className="thumb-shadow absolute inset-0 rounded-[26px] opacity-0 shadow-[0_40px_60px_-30px_rgba(0,0,0,0.35)]" />
-                <div className="absolute inset-0 overflow-hidden rounded-[26px] bg-surface shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_16px_40px_-24px_rgba(0,0,0,0.25)]">
-                  <div
-                    inert
-                    className="pointer-events-none h-[720px] w-[390px] origin-top-left [mask-image:linear-gradient(to_bottom,black_75%,transparent)]"
-                    style={{ transform: `scale(${THUMB_SCALE})` }}
-                  >
-                    <Screen />
-                  </div>
-                </div>
-              </div>
-              <div className="mt-5 w-full px-1" style={{ maxWidth: 390 * THUMB_SCALE }}>
-                <div className="text-[14px] font-semibold">{s.title}</div>
-                <div className="mt-0.5 text-[12.5px] text-[var(--bar-muted)]">
-                  {s.components.length} {s.components.length === 1 ? "component" : "components"}
-                </div>
-              </div>
-            </div>
+              <Screen />
+            </ScreenCard>
           );
         })}
+        {drafts.map((d) => (
+          <ScreenCard
+            key={d.id}
+            title={d.title}
+            detail={`Draft · ${d.blocks.length} ${d.blocks.length === 1 ? "block" : "blocks"}`}
+            {...linkProps(d.title, () => navigate(draftHref(d.id)))}
+            onPointerEnter={(e) => hover(e.currentTarget, true)}
+            onPointerLeave={(e) => hover(e.currentTarget, false)}
+          >
+            <DraftScreen blocks={d.blocks} />
+          </ScreenCard>
+        ))}
+        <button
+          type="button"
+          onClick={newScreen}
+          aria-label="New screen"
+          className="card group flex cursor-pointer flex-col items-center text-left outline-none"
+        >
+          <div
+            className="grid place-items-center rounded-[26px] border-[1.5px] border-dashed border-[var(--bar-muted)]/40 text-[var(--bar-muted)] transition-colors group-hover:border-[var(--bar-fg)]/50 group-hover:text-[var(--bar-fg)] group-focus-visible:border-[var(--bar-fg)]/50"
+            style={{ width: 390 * THUMB_SCALE, height: 720 * THUMB_SCALE }}
+          >
+            <span className="grid size-11 place-items-center rounded-full bg-[var(--bar-bg)] shadow-[0_0_0_1px_var(--bar-ring),0_8px_20px_-10px_rgba(0,0,0,0.2)] transition-transform duration-300 group-hover:scale-110">
+              <PlusIcon width={18} height={18} />
+            </span>
+          </div>
+          <div className="mt-5 w-full px-1" style={{ maxWidth: 390 * THUMB_SCALE }}>
+            <div className="text-[14px] font-semibold">New screen</div>
+            <div className="mt-0.5 text-[12.5px] text-[var(--bar-muted)]">Build a layout from components</div>
+          </div>
+        </button>
       </div>
 
       <section className="mt-20">
@@ -134,6 +156,34 @@ export function ExplorerHome() {
           })}
         </div>
       </section>
+    </div>
+  );
+}
+
+function ScreenCard({
+  title,
+  detail,
+  children,
+  ...props
+}: { title: string; detail: string; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div {...props} className="card group flex cursor-pointer flex-col items-center text-left outline-none">
+      <div className="thumb relative" style={{ width: 390 * THUMB_SCALE, height: 720 * THUMB_SCALE }}>
+        <div className="thumb-shadow absolute inset-0 rounded-[26px] opacity-0 shadow-[0_40px_60px_-30px_rgba(0,0,0,0.35)]" />
+        <div className="absolute inset-0 overflow-hidden rounded-[26px] bg-surface shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_16px_40px_-24px_rgba(0,0,0,0.25)]">
+          <div
+            inert
+            className="pointer-events-none h-[720px] w-[390px] origin-top-left [mask-image:linear-gradient(to_bottom,black_75%,transparent)]"
+            style={{ transform: `scale(${THUMB_SCALE})` }}
+          >
+            {children}
+          </div>
+        </div>
+      </div>
+      <div className="mt-5 w-full px-1" style={{ maxWidth: 390 * THUMB_SCALE }}>
+        <div className="text-[14px] font-semibold">{title}</div>
+        <div className="mt-0.5 text-[12.5px] text-[var(--bar-muted)]">{detail}</div>
+      </div>
     </div>
   );
 }

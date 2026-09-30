@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { CodePanel, type CodeFile } from "./CodePanel";
@@ -15,13 +15,17 @@ import { setDrillFrom, takeDrillFrom } from "./transition";
 
 gsap.registerPlugin(useGSAP);
 
-type ViewerProps = { files: CodeFile[]; screen: string; component?: string };
+type ViewerProps = { files: CodeFile[] } & (
+  | { screen: string; component?: string; stage?: undefined }
+  /** A page outside the registry, such as a draft, brings its own preview. */
+  | { stage: ReactNode; screen?: undefined; component?: undefined }
+);
 
 /**
  * One route's stage: a live preview and its source, stacked. Switching
  * modes cross-blurs between the two while the shell fades to dark.
  */
-export function Viewer({ files, screen, component }: ViewerProps) {
+export function Viewer({ files, screen, component, stage }: ViewerProps) {
   const { mode, navigate, setMode } = useShell();
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -101,7 +105,9 @@ export function Viewer({ files, screen, component }: ViewerProps) {
   return (
     <div ref={root} className="relative h-dvh overflow-hidden">
       <div className="preview-layer absolute inset-0 flex flex-col items-center justify-center pb-4 pt-[78px]">
-        {component ? (
+        {screen === undefined ? (
+          stage
+        ) : component ? (
           <ComponentStage screen={screen} slug={component} />
         ) : (
           <Phone scroller={scroller} screen={screen}>

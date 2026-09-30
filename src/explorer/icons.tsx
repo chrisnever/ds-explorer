@@ -38,6 +38,14 @@ export const CommentIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export const BuildIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <rect x="2.5" y="2.5" width="11" height="4" rx="1" />
+    <rect x="2.5" y="9.5" width="6" height="4" rx="1" />
+    <path d="M11.5 9.5v4M9.5 11.5h4" />
+  </svg>
+);
+
 export const CloseIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base} {...p}>
     <path d="m4 4 8 8M12 4l-8 8" />
@@ -67,5 +75,22 @@ export const DuplicateIcon = (p: SVGProps<SVGSVGElement>) => (
 export const CheckIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base} {...p}>
     <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
+  </svg>
+);
+
+export const PlusIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <path d="M8 3v10M3 8h10" />
+  </svg>
+);
+
+export const GripIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base} {...p}>
+    <circle cx="6" cy="4" r=".9" fill="currentColor" stroke="none" />
+    <circle cx="10" cy="4" r=".9" fill="currentColor" stroke="none" />
+    <circle cx="6" cy="8" r=".9" fill="currentColor" stroke="none" />
+    <circle cx="10" cy="8" r=".9" fill="currentColor" stroke="none" />
+    <circle cx="6" cy="12" r=".9" fill="currentColor" stroke="none" />
+    <circle cx="10" cy="12" r=".9" fill="currentColor" stroke="none" />
   </svg>
 );

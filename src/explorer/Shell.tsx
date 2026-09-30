@@ -4,12 +4,12 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { crumbsFor } from "./registry";
+import { crumbsFor, type Crumb } from "./registry";
 import { TopBar } from "./TopBar";
 
 gsap.registerPlugin(useGSAP);
 
-export type Mode = "preview" | "inspect" | "code" | "comment";
+export type Mode = "preview" | "inspect" | "code" | "comment" | "build";
 
 /** How the home page groups things: by screen, or one card per component. */
 export type Browse = "screens" | "components";
@@ -19,8 +19,10 @@ type ShellContextValue = {
   setMode: (mode: Mode) => void;
   browse: Browse;
   setBrowse: (browse: Browse) => void;
-  /** Animates the current page out, then pushes the route. */
-  navigate: (href: string) => void;
+  /** Animates the current page out, then pushes the route, arriving in `mode` if given. */
+  navigate: (href: string, options?: { mode?: Mode }) => void;
+  /** Names a page the registry doesn't know, such as a draft, in the breadcrumbs. */
+  setPageCrumb: (crumb: Crumb | null) => void;
 };
 
 const ShellContext = createContext<ShellContextValue | null>(null);
@@ -30,6 +32,8 @@ export function useShell() {
   if (!ctx) throw new Error("useShell must be used inside <Shell>");
   return ctx;
 }
+
+const TRANSIENT = new Set<Mode>(["inspect", "comment", "build"]);
 
 const THEMES = {
   light: {
@@ -53,28 +57,43 @@ const THEMES = {
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  // Mode remembers the route it was chosen on. Inspect and comment are
-  // transient tools and drop back to preview on navigation; code view sticks
-  // so you can walk the breadcrumbs while reading source.
-  const [chosen, setChosen] = useState<{ mode: Mode; path: string }>({ mode: "preview", path: pathname });
+  // Inspect, comment and build are transient tools and drop back to preview
+  // on navigation; code view sticks so you can walk the breadcrumbs while
+  // reading source. Every draft shares one pathname, so this follows each
+  // route change rather than remembering the path a mode was chosen on.
+  const [mode, setMode] = useState<Mode>("preview");
+  const [modePath, setModePath] = useState(pathname);
+  const [arrivalMode, setArrivalMode] = useState<Mode | null>(null);
+  if (modePath !== pathname) {
+    setModePath(pathname);
+    setMode(arrivalMode ?? (TRANSIENT.has(mode) ? "preview" : mode));
+    setArrivalMode(null);
+  }
   // Lives here rather than on the home page so it survives drilling in and back out.
   const [browse, setBrowse] = useState<Browse>("screens");
   const root = useRef<HTMLDivElement>(null);
   const page = useRef<HTMLDivElement>(null);
   const leaving = useRef(false);
-  const crumbs = crumbsFor(pathname);
+  const [pageCrumb, setPageCrumbState] = useState<{ crumb: Crumb; path: string } | null>(null);
+  const setPageCrumb = useCallback(
+    (crumb: Crumb | null) => setPageCrumbState(crumb && { crumb, path: pathname }),
+    [pathname],
+  );
+  const extra = pageCrumb?.path === pathname ? pageCrumb.crumb : null;
+  const crumbs = extra ? [...crumbsFor("/"), extra] : crumbsFor(pathname);
   const isRoot = crumbs.length === 1;
-  // Comments are on individual components, not whole screens.
+  // Composed screens, which can be built on as well as viewed.
+  const isDraft = pathname === "/draft";
   const isComponent = crumbs.length === 3;
+  // Comments are on individual components and drafts, not the coded screens.
+  const canComment = isComponent || isDraft;
 
   useEffect(() => {
     leaving.current = false;
   }, [pathname]);
 
-  const transient = chosen.mode === "inspect" || chosen.mode === "comment";
-  const mode: Mode = transient && chosen.path !== pathname ? "preview" : chosen.mode;
-  const effectiveMode: Mode = isRoot || (mode === "comment" && !isComponent) ? "preview" : mode;
-  const setMode = useCallback((m: Mode) => setChosen({ mode: m, path: pathname }), [pathname]);
+  const effectiveMode: Mode =
+    isRoot || (mode === "comment" && !canComment) || (mode === "build" && !isDraft) ? "preview" : mode;
 
   useGSAP(
     () => {
@@ -85,9 +104,10 @@ export function Shell({ children }: { children: ReactNode }) {
   );
 
   const navigate = useCallback(
-    (href: string) => {
+    (href: string, options?: { mode?: Mode }) => {
       if (leaving.current || href === pathname) return;
       leaving.current = true;
+      setArrivalMode(options?.mode ?? null);
       router.prefetch(href);
       gsap.to(page.current, {
         opacity: 0,
@@ -113,22 +133,23 @@ export function Shell({ children }: { children: ReactNode }) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if ((e.target as HTMLElement)?.closest("input, textarea, [contenteditable]")) return;
       if (e.key === "Escape") {
-        // Leave comment mode before leaving the component.
-        if (effectiveMode === "comment") return setMode("preview");
+        // Close the comment or build panel before leaving the page.
+        if (effectiveMode === "comment" || effectiveMode === "build") return setMode("preview");
         if (up) navigate(up);
       }
       if (isRoot) return;
       if (e.key === "1") setMode("preview");
       if (e.key === "2") setMode(mode === "inspect" ? "preview" : "inspect");
       if (e.key === "3") setMode(mode === "code" ? "preview" : "code");
-      if (e.key === "4" && isComponent) setMode(mode === "comment" ? "preview" : "comment");
+      if (e.key === "4" && canComment) setMode(mode === "comment" ? "preview" : "comment");
+      if (e.key === "5" && isDraft) setMode(mode === "build" ? "preview" : "build");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [up, isRoot, isComponent, navigate, mode, effectiveMode, setMode]);
+  }, [up, isRoot, isDraft, canComment, navigate, mode, effectiveMode]);
 
   return (
-    <ShellContext.Provider value={{ mode: effectiveMode, setMode, browse, setBrowse, navigate }}>
+    <ShellContext.Provider value={{ mode: effectiveMode, setMode, browse, setBrowse, navigate, setPageCrumb }}>
       <div
         ref={root}
         style={THEMES.light as React.CSSProperties}
@@ -138,7 +159,8 @@ export function Shell({ children }: { children: ReactNode }) {
           crumbs={crumbs}
           mode={effectiveMode}
           showModes={!isRoot}
-          showComment={isComponent}
+          showComment={canComment}
+          showBuild={isDraft}
           showBrowse={isRoot}
         />
         <div ref={page} key={pathname}>

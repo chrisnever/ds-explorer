@@ -4,7 +4,7 @@ import { Fragment, useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import type { Crumb } from "./registry";
-import { BackIcon, CodeIcon, CommentIcon, InspectIcon, InteractIcon } from "./icons";
+import { BackIcon, BuildIcon, CodeIcon, CommentIcon, InspectIcon, InteractIcon } from "./icons";
 import { useShell, type Browse, type Mode } from "./Shell";
 
 gsap.registerPlugin(useGSAP);
@@ -20,13 +20,27 @@ const BROWSE: { value: Browse; label: string }[] = [
   { value: "components", label: "Components" },
 ];
 
-type TopBarProps = { crumbs: Crumb[]; mode: Mode; showModes: boolean; showComment: boolean; showBrowse: boolean };
+// Tools that open a side panel, after a divider. Each shows only where it applies.
+const PANEL_MODES: { mode: Mode; label: string; key: string; Icon: typeof CodeIcon }[] = [
+  { mode: "comment", label: "Comments", key: "4", Icon: CommentIcon },
+  { mode: "build", label: "Build", key: "5", Icon: BuildIcon },
+];
 
-export function TopBar({ crumbs, mode, showModes, showComment, showBrowse }: TopBarProps) {
+type TopBarProps = {
+  crumbs: Crumb[];
+  mode: Mode;
+  showModes: boolean;
+  showComment: boolean;
+  showBuild: boolean;
+  showBrowse: boolean;
+};
+
+export function TopBar({ crumbs, mode, showModes, showComment, showBuild, showBrowse }: TopBarProps) {
   const { setMode, browse, setBrowse, navigate } = useShell();
   const root = useRef<HTMLElement>(null);
   const trail = crumbs.map((c) => c.label).join("/");
   const back = crumbs.at(-2);
+  const panelModes = PANEL_MODES.filter((p) => (p.mode === "comment" ? showComment : showBuild));
 
   // Newest crumb slides in; the back chevron appears once there's somewhere to go.
   useGSAP(
@@ -64,7 +78,7 @@ export function TopBar({ crumbs, mode, showModes, showComment, showBrowse }: Top
       const active = root.current?.querySelector<HTMLElement>(`[data-mode="${mode}"]`);
       if (active) gsap.to(".mode-thumb", { x: active.offsetLeft, duration: 0.4, ease: "power3.out" });
     },
-    { scope: root, dependencies: [mode, showComment], revertOnUpdate: false },
+    { scope: root, dependencies: [mode, showComment, showBuild], revertOnUpdate: false },
   );
 
   useGSAP(
@@ -173,24 +187,23 @@ export function TopBar({ crumbs, mode, showModes, showComment, showBrowse }: Top
               <Icon />
             </button>
           ))}
-          {showComment && (
-            <>
-              <span aria-hidden className="mx-1 my-1.5 w-px bg-[var(--bar-ring)]" />
-              <button
-                type="button"
-                data-mode="comment"
-                aria-label="Comments"
-                aria-pressed={mode === "comment"}
-                title="Comments  ·  4"
-                onClick={() => setMode(mode === "comment" ? "preview" : "comment")}
-                className={`relative grid size-8 place-items-center rounded-[9px] transition-colors ${
-                  mode === "comment" ? "text-[var(--bar-fg)]" : "text-[var(--bar-muted)] hover:text-[var(--bar-fg)]"
-                }`}
-              >
-                <CommentIcon />
-              </button>
-            </>
-          )}
+          {panelModes.length > 0 && <span aria-hidden className="mx-1 my-1.5 w-px bg-[var(--bar-ring)]" />}
+          {panelModes.map(({ mode: m, label, key, Icon }) => (
+            <button
+              key={m}
+              type="button"
+              data-mode={m}
+              aria-label={label}
+              aria-pressed={mode === m}
+              title={`${label}  ·  ${key}`}
+              onClick={() => setMode(mode === m ? "preview" : m)}
+              className={`relative grid size-8 place-items-center rounded-[9px] transition-colors ${
+                mode === m ? "text-[var(--bar-fg)]" : "text-[var(--bar-muted)] hover:text-[var(--bar-fg)]"
+              }`}
+            >
+              <Icon />
+            </button>
+          ))}
         </div>
       </div>
     </header>

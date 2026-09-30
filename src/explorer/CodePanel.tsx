@@ -13,7 +13,8 @@ export function CodePanel({ files }: { files: CodeFile[] }) {
   const [index, setIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const root = useRef<HTMLDivElement>(null);
-  const file = files[index];
+  // Draft screens can drop files while this panel stays mounted.
+  const file = files[Math.min(index, files.length - 1)];
 
   useGSAP(
     () => {

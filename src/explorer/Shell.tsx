@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { crumbsFor, type Crumb } from "./registry";
+import { screenBlocks } from "./renderers";
 import { TopBar } from "./TopBar";
 
 gsap.registerPlugin(useGSAP);
@@ -85,15 +86,19 @@ export function Shell({ children }: { children: ReactNode }) {
   // Composed screens, which can be built on as well as viewed.
   const isDraft = pathname === "/draft";
   const isComponent = crumbs.length === 3;
+  const isScreen = crumbs.length === 2 && !isDraft;
   // Comments are on individual components and drafts, not the coded screens.
   const canComment = isComponent || isDraft;
+  // Drafts build in place, components edit their story's args, and a coded
+  // screen builds on a draft copy when it can be expressed as blocks.
+  const canBuild = isDraft || isComponent || (isScreen && !!screenBlocks(pathname.split("/")[1]));
 
   useEffect(() => {
     leaving.current = false;
   }, [pathname]);
 
   const effectiveMode: Mode =
-    isRoot || (mode === "comment" && !canComment) || (mode === "build" && !isDraft) ? "preview" : mode;
+    isRoot || (mode === "comment" && !canComment) || (mode === "build" && !canBuild) ? "preview" : mode;
 
   useGSAP(
     () => {
@@ -142,11 +147,11 @@ export function Shell({ children }: { children: ReactNode }) {
       if (e.key === "2") setMode(mode === "inspect" ? "preview" : "inspect");
       if (e.key === "3") setMode(mode === "code" ? "preview" : "code");
       if (e.key === "4" && canComment) setMode(mode === "comment" ? "preview" : "comment");
-      if (e.key === "5" && isDraft) setMode(mode === "build" ? "preview" : "build");
+      if (e.key === "5" && canBuild) setMode(mode === "build" ? "preview" : "build");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [up, isRoot, isDraft, canComment, navigate, mode, effectiveMode]);
+  }, [up, isRoot, canBuild, canComment, navigate, mode, effectiveMode]);
 
   return (
     <ShellContext.Provider value={{ mode: effectiveMode, setMode, browse, setBrowse, navigate, setPageCrumb }}>
@@ -160,7 +165,7 @@ export function Shell({ children }: { children: ReactNode }) {
           mode={effectiveMode}
           showModes={!isRoot}
           showComment={canComment}
-          showBuild={isDraft}
+          showBuild={canBuild}
           showBrowse={isRoot}
         />
         <div ref={page} key={pathname}>

@@ -4,7 +4,8 @@ import { createContext, useContext, type ComponentType, type ReactNode } from "r
 
 // A small reader for Storybook's Component Story Format (CSF): the default
 // export describes the component, every other export is one story. Covers
-// args, render functions and decorators, which is what the NBK stories use.
+// args, argTypes, render functions and decorators, which is what the NBK
+// stories use.
 
 type Args = Record<string, unknown>;
 type Context = { args: Args; name: string };
@@ -14,7 +15,14 @@ type Decorator = (Story: ComponentType, context: Context) => ReactNode;
 /** Args to lay over a story's own, e.g. text edited on a draft screen. */
 export const StoryArgs = createContext<Args | null>(null);
 
-type Annotations = { args?: Args; render?: Render; decorators?: Decorator[] };
+/** The parts of a Storybook argType the explorer reads to pick a control. */
+export type ArgType = {
+  control?: false | string | { type?: string };
+  options?: readonly unknown[];
+  table?: { type?: { summary?: string } };
+};
+
+type Annotations = { args?: Args; argTypes?: Record<string, ArgType>; render?: Render; decorators?: Decorator[] };
 type Meta = Annotations & {
   title?: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- stories target arbitrary props
@@ -26,7 +34,7 @@ type StoryExport = (Annotations & { name?: string }) | (Render & Annotations & {
 
 export type StoryModule = { default: Meta } & Record<string, unknown>;
 /** `args` are the story's merged props, for generating usage code. */
-export type Story = { id: string; name: string; args: Args; Render: ComponentType };
+export type Story = { id: string; name: string; args: Args; argTypes: Record<string, ArgType>; Render: ComponentType };
 
 /**
  * Turns one stories file into renderable stories, in source order. The order
@@ -45,6 +53,7 @@ export function storiesFrom(mod: StoryModule): Story[] {
       const isFn = typeof story === "function";
       const name = (isFn ? story.storyName : story.name) ?? startCase(key);
       const args = { ...meta.args, ...story.args };
+      const argTypes = { ...meta.argTypes, ...story.argTypes };
       const render: Render =
         (isFn ? story : story.render) ??
         meta.render ??
@@ -67,7 +76,7 @@ export function storiesFrom(mod: StoryModule): Story[] {
           return <>{render(merged, { ...context, args: merged })}</>;
         },
       );
-      return { id: key, name, args, Render };
+      return { id: key, name, args, argTypes, Render };
     });
 }
 

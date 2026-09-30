@@ -170,7 +170,7 @@ function ScreenCard({
     <div {...props} className="card group flex cursor-pointer flex-col items-center text-left outline-none">
       <div className="thumb relative" style={{ width: 390 * THUMB_SCALE, height: 720 * THUMB_SCALE }}>
         <div className="thumb-shadow absolute inset-0 rounded-[26px] opacity-0 shadow-[0_40px_60px_-30px_rgba(0,0,0,0.35)]" />
-        <div className="absolute inset-0 overflow-hidden rounded-[26px] bg-surface shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_16px_40px_-24px_rgba(0,0,0,0.25)]">
+        <div className="absolute inset-0 overflow-hidden rounded-[26px] bg-screen shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_16px_40px_-24px_rgba(0,0,0,0.25)]">
           <div
             inert
             className="pointer-events-none h-[720px] w-[390px] origin-top-left [mask-image:linear-gradient(to_bottom,black_75%,transparent)]"

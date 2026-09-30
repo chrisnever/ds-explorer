@@ -1,6 +1,6 @@
 "use client";
 
-import { templates, textFor } from "./blocks";
+import { argsFor, templateFor } from "./blocks";
 import type { Draft } from "./drafts";
 import { components } from "./registry";
 
@@ -28,9 +28,12 @@ export function componentName(title: string) {
 }
 
 export function draftSource(draft: Draft) {
-  const blocks = draft.blocks.filter((b) => templates[b.slug]);
+  const blocks = draft.blocks.flatMap((b) => {
+    const template = templateFor(b.slug, b.story);
+    return template ? [{ ...b, template }] : [];
+  });
   const slugs = blocks.map((b) => b.slug);
-  const ds = new Set(slugs.filter((s) => !isNbk(s)).flatMap((s) => templates[s].uses));
+  const ds = new Set(blocks.filter((b) => !isNbk(b.slug)).flatMap((b) => b.template.uses));
   // NBK and the design system both have a Button, so alias whichever clashes.
   const nbk = new Map(
     slugs.filter(isNbk).map((s) => {
@@ -53,7 +56,7 @@ export function draftSource(draft: Draft) {
   const body = blocks
     .map((b) => {
       const local = nbk.get(b.slug)?.local ?? components[b.slug].name;
-      const jsx = templates[b.slug].jsx(textFor(b.slug, b.text), local);
+      const jsx = b.template.jsx(argsFor(b.template, b.args), local);
       return `<div className="py-1.5">\n${indent(jsx, 2)}\n</div>`;
     })
     .join("\n");
@@ -63,7 +66,7 @@ export function draftSource(draft: Draft) {
 // Callbacks are stubs: wire them up to state and navigation.
 ${lines.join("\n")}${lines.length ? "\n\n" : ""}export function ${name}() {
   return (
-    <div className="px-3 pb-10 pt-3">
+    <div className="px-5 pb-10 pt-3">
 ${body ? indent(body, 6) : "      {/* Add components in the explorer's Build mode. */}"}
     </div>
   );

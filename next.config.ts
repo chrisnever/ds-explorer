@@ -1,4 +1,5 @@
 import { realpathSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import type { NextConfig } from "next";
 
@@ -12,6 +13,19 @@ const basePath = process.env.SITES_BASE_PATH;
 const nbkUi = realpathSync("node_modules/@nbk/ui");
 const root = commonAncestor(process.cwd(), nbkUi);
 
+// react-native-svg comes from @nbk/ui's own install. Its entry pulls in the
+// native (Fabric) build, and resolveExtensions doesn't reach inside packages to
+// pick its `.web.js` files, so alias straight to the web elements (Svg, Path…).
+// That skips the package's xml/css helpers, which @nbk/ui doesn't use.
+// Turbopack aliases are project-relative, hence the leading "./".
+const svgWeb = `./${path.relative(
+  process.cwd(),
+  path.join(
+    path.dirname(createRequire(path.join(nbkUi, "package.json")).resolve("react-native-svg/package.json")),
+    "lib/module/elements.web.js",
+  ),
+)}`;
+
 // React Native components render through react-native-web. `react-native` is
 // installed only for its types; every import of it resolves to the web build,
 // via a thin wrapper that lets the explorer own the colour scheme. The wrapper
@@ -20,9 +34,13 @@ const root = commonAncestor(process.cwd(), nbkUi);
 const reactNativeWeb: NextConfig = {
   turbopack: {
     root,
-    resolveAlias: { "react-native": "./src/explorer/react-native.ts" },
+    resolveAlias: { "react-native": "./src/explorer/react-native.ts", "react-native-svg": svgWeb },
     rules: {
       "*.stories.{tsx,ts,jsx,js}": { loaders: [path.resolve("loaders/csf-export-order.js")] },
+      // Metro turns an imported image into an asset source; react-native-web's
+      // Image takes a plain URL instead, so NBK's images load as one rather
+      // than as Next's image objects. The explorer's own images are untouched.
+      "*.{png,jpg,jpeg,gif,webp}": { condition: { path: /nbk-components\/packages\// }, type: "asset" },
     },
     // `.web.*` files win over their native counterparts, as in Expo and Metro.
     resolveExtensions: [

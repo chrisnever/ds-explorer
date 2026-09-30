@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
-import { templates, textFor, type Template, type Text } from "./blocks";
+import { ArgsEditor } from "./ArgsEditor";
+import { argsFor, diffArgs, templateFor, type Args, type Template } from "./blocks";
+import { BUILD_PANEL_SPACE, BuildPanel, ClosePanelButton } from "./BuildPanel";
 import type { CodeFile } from "./CodePanel";
 import { CommentLayer } from "./CommentLayer";
 import { CommentsPanel } from "./CommentsPanel";
@@ -15,6 +17,7 @@ import { highlightTsx, plainHtml } from "./highlight";
 import { BackIcon, CloseIcon, GripIcon } from "./icons";
 import { InspectOverlay } from "./InspectOverlay";
 import { components, screens, type ComponentMeta } from "./registry";
+import { componentStories } from "./renderers";
 import { useShell } from "./Shell";
 import { setDrillFrom } from "./transition";
 import { Viewer } from "./Viewer";
@@ -28,18 +31,21 @@ const BLOCK_MIME = "application/x-ds-block";
 // Palette previews render at the phone's content width, scaled down.
 const STAGE_WIDTH = 366;
 const PREVIEW_SCALE = 0.6;
-// Side panel widths plus their gap from the edge; the phone shifts away by
-// half of one so it stays centred in the space the panel leaves.
-const PALETTE_SPACE = 312;
+// The comments panel's width plus its gap from the edge; the phone shifts away
+// by half of it (or of the build panel) to stay centred in the space left.
 const COMMENTS_SPACE = 356;
 
 /** A composed screen, read-only: used for home page thumbnails. */
 export function DraftScreen({ blocks }: { blocks: Block[] }) {
   return (
-    <div className="px-3 pb-10 pt-3">
+    <div className="px-5 pb-10 pt-3">
       {blocks.map((b) => {
-        const Render = templates[b.slug]?.Render;
-        return <div key={b.id} className="py-1.5">{Render && <Render text={textFor(b.slug, b.text)} />}</div>;
+        const template = templateFor(b.slug, b.story);
+        return (
+          <div key={b.id} className="py-1.5">
+            {template && <template.Render args={argsFor(template, b.args)} />}
+          </div>
+        );
       })}
     </div>
   );
@@ -120,7 +126,7 @@ function DraftStage({ draft }: { draft: Draft }) {
   // droppable is over the phone.
   const [dropAt, setDropAt] = useState<number | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
-  // The block whose text the panel is editing, and which of its fields to
+  // The block whose args the panel is editing, and which of its fields to
   // focus: `n` bumps so clicking the same text again refocuses it.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ key: string; n: number } | null>(null);
@@ -136,7 +142,7 @@ function DraftStage({ draft }: { draft: Draft }) {
   useGSAP(
     () => {
       const wide = window.innerWidth >= 1024;
-      const x = !wide ? 0 : building ? PALETTE_SPACE / 2 : commenting ? -COMMENTS_SPACE / 2 : 0;
+      const x = !wide ? 0 : building ? BUILD_PANEL_SPACE / 2 : commenting ? -COMMENTS_SPACE / 2 : 0;
       gsap.to(shift.current, { x, duration: 0.55, ease: "power3.inOut" });
     },
     { dependencies: [building, commenting], revertOnUpdate: false },
@@ -167,8 +173,12 @@ function DraftStage({ draft }: { draft: Draft }) {
 
   const remove = (id: string) => setBlocks(blocks.filter((b) => b.id !== id));
 
-  const setText = (id: string, text: Text | undefined) =>
-    setBlocks(blocks.map((b) => (b.id === id ? { ...b, text } : b)));
+  const setArgs = (id: string, args: Args | undefined) =>
+    setBlocks(blocks.map((b) => (b.id === id ? { ...b, args } : b)));
+
+  // A different story brings its own args, so edits made to the old one go.
+  const setStory = (id: string, story: string) =>
+    setBlocks(blocks.map((b) => (b.id === id ? { ...b, story, args: undefined } : b)));
 
   const select = (id: string, key?: string) => {
     setSelectedId(id);
@@ -230,7 +240,7 @@ function DraftStage({ draft }: { draft: Draft }) {
   return (
     <>
       <div ref={shift} className="flex w-full flex-col items-center">
-        <div className="stage relative h-[min(812px,calc(100dvh-110px))] w-[390px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[44px] bg-surface shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_80px_-30px_rgba(0,0,0,0.25),0_12px_24px_-12px_rgba(0,0,0,0.1)]">
+        <div className="stage relative h-[min(812px,calc(100dvh-110px))] w-[390px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[44px] bg-screen shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_80px_-30px_rgba(0,0,0,0.25),0_12px_24px_-12px_rgba(0,0,0,0.1)]">
           <div
             ref={scroller}
             onDragOver={onDragOver}
@@ -238,7 +248,7 @@ function DraftStage({ draft }: { draft: Draft }) {
             onDrop={onDrop}
             // Clicking the screen around the blocks lets go of the selection.
             onClick={(e) => building && !(e.target as Element).closest("[data-block]") && setSelectedId(null)}
-            className="flex h-full flex-col overflow-y-auto overscroll-contain px-3 pb-10 pt-3 [scrollbar-width:none]"
+            className="flex h-full flex-col overflow-y-auto overscroll-contain px-5 pb-10 pt-3 [scrollbar-width:none]"
           >
             {blocks.length === 0 ? (
               <EmptyState building={building} over={dropAt !== null} onBuild={() => setMode("build")} />
@@ -248,7 +258,7 @@ function DraftStage({ draft }: { draft: Draft }) {
                   <BlockFrame
                     key={b.id}
                     block={b}
-                    template={templates[b.slug]}
+                    template={templateFor(b.slug, b.story)}
                     editable={building}
                     selected={selected?.id === b.id}
                     onSelect={(key) => select(b.id, key)}
@@ -286,7 +296,8 @@ function DraftStage({ draft }: { draft: Draft }) {
         <Palette
           selected={selected}
           focus={focus}
-          onText={(text) => selected && setText(selected.id, text)}
+          onArgs={(args) => selected && setArgs(selected.id, args)}
+          onStory={(story) => selected && setStory(selected.id, story)}
           onDeselect={() => setSelectedId(null)}
           title={draft.title}
           onRename={(title) => updateDraft(draft.id, { title })}
@@ -381,14 +392,15 @@ function BlockFrame({
   const frame = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const meta = components[block.slug];
-  const text = textFor(block.slug, block.text);
+  const args = argsFor(template, block.args);
   const Render = template?.Render;
 
-  // The innermost element whose whole text is one of the fields' values.
+  // The innermost element whose whole text is one of the text fields' values.
   const fieldAt = (target: Element) => {
+    const texts = template?.fields.filter((f) => f.kind === "text" || f.kind === "multiline") ?? [];
     for (let el: Element | null = target; el && el !== body.current; el = el.parentElement) {
       const shown = el.textContent?.trim();
-      const hit = shown && template?.fields.find((f) => text[f.key]?.trim() === shown);
+      const hit = shown && texts.find((f) => String(args[f.key] ?? "").trim() === shown);
       if (hit) return hit.key;
     }
   };
@@ -430,7 +442,7 @@ function BlockFrame({
                 type="button"
                 aria-label={`Edit ${meta?.name ?? block.slug}`}
                 aria-pressed={selected}
-                title="Edit text"
+                title="Edit"
                 onClick={() => onSelect()}
                 className="rounded-md px-1.5 py-0.5 font-mono text-[11px] text-[var(--bar-muted)] hover:bg-[var(--bar-thumb)] hover:text-[var(--bar-fg)]"
               >{`<${meta?.name ?? block.slug} />`}</button>
@@ -473,7 +485,7 @@ function BlockFrame({
           className={editable ? "cursor-text" : undefined}
         >
           {Render ? (
-            <Render text={text} />
+            <Render args={args} />
           ) : (
             <p className="py-4 text-center text-[12px] text-ink-3">Missing component “{block.slug}”</p>
           )}
@@ -486,7 +498,8 @@ function BlockFrame({
 function Palette({
   selected,
   focus,
-  onText,
+  onArgs,
+  onStory,
   onDeselect,
   title,
   onRename,
@@ -496,7 +509,8 @@ function Palette({
 }: {
   selected: Block | undefined;
   focus: { key: string; n: number } | null;
-  onText: (text: Text | undefined) => void;
+  onArgs: (args: Args | undefined) => void;
+  onStory: (story: string) => void;
   onDeselect: () => void;
   title: string;
   onRename: (title: string) => void;
@@ -504,16 +518,7 @@ function Palette({
   onDelete: () => void;
   onClose: () => void;
 }) {
-  const root = useRef<HTMLElement>(null);
   const [query, setQuery] = useState("");
-
-  useGSAP(
-    () => {
-      gsap.from(root.current, { x: -24, opacity: 0, filter: "blur(6px)", duration: 0.45, ease: "power3.out" });
-    },
-    { scope: root },
-  );
-
   const [name, setName] = useState(title);
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -534,13 +539,17 @@ function Palette({
   };
 
   return (
-    <aside
-      ref={root}
-      aria-label="Build"
-      className="absolute bottom-4 left-4 top-[78px] z-30 flex w-[296px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[18px] bg-[var(--bar-bg)] shadow-[0_0_0_1px_var(--bar-ring),0_24px_60px_-24px_rgba(0,0,0,0.25)]"
-    >
+    <BuildPanel>
       {selected ? (
-        <TextEditor key={selected.id} block={selected} focus={focus} onText={onText} onBack={onDeselect} onClose={onClose} />
+        <BlockEditor
+          key={selected.id}
+          block={selected}
+          focus={focus}
+          onArgs={onArgs}
+          onStory={onStory}
+          onBack={onDeselect}
+          onClose={onClose}
+        />
       ) : (
         <>
           <header className="shrink-0 border-b border-[var(--bar-ring)] p-3">
@@ -561,15 +570,7 @@ function Palette({
                   className="w-full rounded-lg bg-transparent px-2 py-1 text-[14px] font-semibold outline-none hover:bg-[var(--bar-thumb)] focus:bg-[var(--bar-thumb)]"
                 />
               </label>
-              <button
-                type="button"
-                aria-label="Close build panel"
-                title="Close  ·  Esc"
-                onClick={onClose}
-                className="grid size-8 shrink-0 place-items-center rounded-[9px] text-[var(--bar-muted)] hover:bg-[var(--bar-thumb)] hover:text-[var(--bar-fg)]"
-              >
-                <CloseIcon />
-              </button>
+              <ClosePanelButton onClose={onClose} />
             </div>
             <input
               type="search"
@@ -590,13 +591,7 @@ function Palette({
                 <h3 className="mb-2 px-1 text-[11.5px] font-medium text-[var(--bar-muted)]">{g.label}</h3>
                 <div className="flex flex-col gap-2">
                   {g.items.map((c) => (
-                    <PaletteTile
-                      key={c.slug}
-                      meta={c}
-                      Render={templates[c.slug]?.Render}
-                      text={textFor(c.slug)}
-                      onAdd={() => onAdd(c.slug)}
-                    />
+                    <PaletteTile key={c.slug} meta={c} template={templateFor(c.slug)} onAdd={() => onAdd(c.slug)} />
                   ))}
                 </div>
               </section>
@@ -614,46 +609,30 @@ function Palette({
           </footer>
         </>
       )}
-    </aside>
+    </BuildPanel>
   );
 }
 
-/** The panel while a block is selected: its text, as fields. */
-function TextEditor({
+/** The panel while a block is selected: its story and args, as fields. */
+function BlockEditor({
   block,
   focus,
-  onText,
+  onArgs,
+  onStory,
   onBack,
   onClose,
 }: {
   block: Block;
   focus: { key: string; n: number } | null;
-  onText: (text: Text | undefined) => void;
+  onArgs: (args: Args | undefined) => void;
+  onStory: (story: string) => void;
   onBack: () => void;
   onClose: () => void;
 }) {
-  const inputs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
-  const template = templates[block.slug];
-  const text = textFor(block.slug, block.text);
+  const template = templateFor(block.slug, block.story);
+  const args = argsFor(template, block.args);
   const fields = template?.fields ?? [];
-
-  // Clicking a piece of text on the phone jumps to its field.
-  useEffect(() => {
-    const el = focus && inputs.current[focus.key];
-    if (!el) return;
-    el.focus();
-    el.select();
-  }, [focus]);
-
-  const edit = (key: string, value: string) => {
-    const next = { ...block.text, [key]: value };
-    // Keep only what differs from the defaults, so a reset field follows them again.
-    for (const k of Object.keys(next)) if (next[k] === template?.defaults[k]) delete next[k];
-    onText(Object.keys(next).length ? next : undefined);
-  };
-
-  const inputClass =
-    "w-full rounded-lg bg-[var(--bar-thumb)] px-2.5 py-1.5 text-[13px] outline-none ring-[var(--bar-fg)] focus:ring-[1.5px]";
+  const stories = componentStories[block.slug] ?? [];
 
   return (
     <>
@@ -668,69 +647,54 @@ function TextEditor({
           <BackIcon />
         </button>
         <h2 className="min-w-0 flex-1 truncate font-mono text-[13px] font-medium">{`<${components[block.slug]?.name ?? block.slug} />`}</h2>
-        <button
-          type="button"
-          aria-label="Close build panel"
-          title="Close  ·  Esc"
-          onClick={onClose}
-          className="grid size-8 shrink-0 place-items-center rounded-[9px] text-[var(--bar-muted)] hover:bg-[var(--bar-thumb)] hover:text-[var(--bar-fg)]"
-        >
-          <CloseIcon />
-        </button>
+        <ClosePanelButton onClose={onClose} />
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {stories.length > 1 && (
+          <label className="mb-4 flex flex-col gap-1">
+            <span className="px-1 text-[11.5px] font-medium text-[var(--bar-muted)]">Story</span>
+            <select
+              value={template?.story?.id}
+              onChange={(e) => onStory(e.target.value)}
+              className="w-full rounded-lg bg-[var(--bar-thumb)] px-2.5 py-1.5 text-[13px] outline-none ring-[var(--bar-fg)] focus:ring-[1.5px]"
+            >
+              {stories.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {fields.length === 0 ? (
           <p className="px-1 py-6 text-center text-[12.5px] leading-relaxed text-[var(--bar-muted)]">
-            This component has no text to edit.
+            This component has nothing to edit.
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
-            <p className="px-1 text-[12px] leading-relaxed text-[var(--bar-muted)]">
+          <>
+            <p className="mb-3 px-1 text-[12px] leading-relaxed text-[var(--bar-muted)]">
               Click text on the screen to jump to it here.
             </p>
-            {fields.map((f) => (
-              <label key={f.key} className="flex flex-col gap-1">
-                <span className="px-1 text-[11.5px] font-medium text-[var(--bar-muted)]">{f.label}</span>
-                {f.multiline ? (
-                  <textarea
-                    ref={(el) => {
-                      inputs.current[f.key] = el;
-                    }}
-                    rows={4}
-                    value={text[f.key] ?? ""}
-                    onChange={(e) => edit(f.key, e.target.value)}
-                    onKeyDown={(e) => e.key === "Escape" && onBack()}
-                    className={`${inputClass} resize-none leading-snug`}
-                  />
-                ) : (
-                  <input
-                    ref={(el) => {
-                      inputs.current[f.key] = el;
-                    }}
-                    value={text[f.key] ?? ""}
-                    onChange={(e) => edit(f.key, e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                      if (e.key === "Escape") onBack();
-                    }}
-                    className={inputClass}
-                  />
-                )}
-              </label>
-            ))}
-          </div>
+            <ArgsEditor
+              fields={fields}
+              values={args}
+              focus={focus}
+              onEscape={onBack}
+              onChange={(key, value) => onArgs(diffArgs(template, { ...block.args, [key]: value }))}
+            />
+          </>
         )}
       </div>
 
-      {block.text && (
+      {block.args && (
         <footer className="shrink-0 border-t border-[var(--bar-ring)] p-2">
           <button
             type="button"
-            onClick={() => onText(undefined)}
+            onClick={() => onArgs(undefined)}
             className="w-full rounded-lg px-2 py-1.5 text-left text-[12.5px] text-[var(--bar-muted)] transition-colors hover:bg-[var(--bar-thumb)] hover:text-[var(--bar-fg)]"
           >
-            Reset to default text
+            Reset to the story’s defaults
           </button>
         </footer>
       )}
@@ -738,17 +702,7 @@ function TextEditor({
   );
 }
 
-function PaletteTile({
-  meta,
-  Render,
-  text,
-  onAdd,
-}: {
-  meta: ComponentMeta;
-  Render: ComponentType<{ text: Text }> | undefined;
-  text: Text;
-  onAdd: () => void;
-}) {
+function PaletteTile({ meta, template, onAdd }: { meta: ComponentMeta; template: Template | undefined; onAdd: () => void }) {
   return (
     // Not a <button>: the preview inside holds the component's own buttons.
     <div
@@ -775,7 +729,7 @@ function PaletteTile({
           className="pointer-events-none absolute left-1/2 top-1/2"
           style={{ width: STAGE_WIDTH, transform: `translate(-50%, -50%) scale(${PREVIEW_SCALE})` }}
         >
-          {Render && <Render text={text} />}
+          {template && <template.Render args={argsFor(template)} />}
         </div>
       </div>
       <div className="border-t border-[var(--bar-ring)] bg-[var(--bar-bg)] px-2.5 py-1.5 font-mono text-[11.5px]">{meta.name}</div>

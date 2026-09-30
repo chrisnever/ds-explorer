@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { Args } from "./blocks";
 
 // Screens people compose in the builder from registry components. Stored in
 // this browser's localStorage, like comments: swap `read`/`write`/`subscribe`
@@ -10,8 +11,10 @@ export type Block = {
   id: string;
   /** Registry slug of the component this block renders. */
   slug: string;
-  /** Text edited in build mode, by template field; the rest keep their defaults. */
-  text?: Record<string, string>;
+  /** The component's story to render; its first when unset. */
+  story?: string;
+  /** Args edited in build mode, by template field; the rest keep their defaults. */
+  args?: Args;
 };
 
 export type Draft = {
@@ -19,6 +22,8 @@ export type Draft = {
   title: string;
   /** Top to bottom. */
   blocks: Block[];
+  /** Slug of the coded screen this draft was copied from, if any. */
+  source?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -29,10 +34,17 @@ const EMPTY: Draft[] = [];
 let cache: Draft[] | null = null;
 const listeners = new Set<() => void>();
 
+// Blocks saved before build mode edited more than text kept it under `text`.
+type Stored = Omit<Draft, "blocks"> & { blocks: (Block & { text?: Args })[] };
+const migrate = (d: Stored): Draft => ({
+  ...d,
+  blocks: d.blocks.map(({ text, ...b }) => (text && !b.args ? { ...b, args: text } : b)),
+});
+
 function read(): Draft[] {
   if (cache) return cache;
   try {
-    cache = JSON.parse(localStorage.getItem(KEY) ?? "[]") as Draft[];
+    cache = (JSON.parse(localStorage.getItem(KEY) ?? "[]") as Stored[]).map(migrate);
   } catch {
     cache = [];
   }
@@ -75,10 +87,17 @@ export function useDraft(id: string | null) {
 
 export const draftHref = (id: string) => `/draft?id=${id}`;
 
-export function createDraft(): Draft {
+export function createDraft(init?: Partial<Pick<Draft, "title" | "blocks" | "source">>): Draft {
   const now = Date.now();
   const all = read();
-  const draft: Draft = { id: crypto.randomUUID(), title: `Untitled screen ${all.length + 1}`, blocks: [], createdAt: now, updatedAt: now };
+  const draft: Draft = {
+    id: crypto.randomUUID(),
+    title: `Untitled screen ${all.length + 1}`,
+    blocks: [],
+    ...init,
+    createdAt: now,
+    updatedAt: now,
+  };
   write([...all, draft]);
   return draft;
 }
@@ -91,4 +110,4 @@ export function deleteDraft(id: string) {
   write(read().filter((d) => d.id !== id));
 }
 
-export const newBlock = (slug: string): Block => ({ id: crypto.randomUUID(), slug });
+export const newBlock = (slug: string, story?: string): Block => ({ id: crypto.randomUUID(), slug, story });

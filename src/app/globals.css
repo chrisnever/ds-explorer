@@ -4,6 +4,8 @@
   /* Design system tokens */
   --color-surface: #f4f4f2;
   --color-panel: #ffffff;
+  /* Background of the phone screens: stages, component card and thumbnails */
+  --color-screen: #ffffff;
   --color-ink: #131313;
   --color-ink-2: #767673;
   --color-ink-3: #a6a6a2;

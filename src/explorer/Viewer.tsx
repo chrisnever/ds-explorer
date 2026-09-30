@@ -3,14 +3,20 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
+import { ArgsEditor } from "./ArgsEditor";
+import { argsFor, diffArgs, templateFor, type Args } from "./blocks";
+import { BUILD_PANEL_SPACE, BuildPanel, ClosePanelButton } from "./BuildPanel";
 import { CodePanel, type CodeFile } from "./CodePanel";
 import { CommentLayer } from "./CommentLayer";
 import { CommentsPanel } from "./CommentsPanel";
 import { addComment, useComments } from "./comments";
+import { setComponentArgs, useComponentArgs } from "./componentArgs";
+import { createDraft, draftHref, newBlock, useDrafts } from "./drafts";
 import { InspectOverlay } from "./InspectOverlay";
-import { componentDemos, componentStories, screenRenderers } from "./renderers";
+import { componentDemos, componentStories, screenBlocks, screenRenderers } from "./renderers";
 import { components, screenBySlug, screens } from "./registry";
 import { useShell } from "./Shell";
+import { StoryArgs } from "./stories";
 import { setDrillFrom, takeDrillFrom } from "./transition";
 
 gsap.registerPlugin(useGSAP);
@@ -110,9 +116,11 @@ export function Viewer({ files, screen, component, stage }: ViewerProps) {
         ) : component ? (
           <ComponentStage screen={screen} slug={component} />
         ) : (
-          <Phone scroller={scroller} screen={screen}>
-            {mode === "inspect" && <InspectOverlay scroller={scroller} onSelect={drillInto} />}
-          </Phone>
+          <ScreenStage screen={screen}>
+            <Phone scroller={scroller} screen={screen}>
+              {mode === "inspect" && <InspectOverlay scroller={scroller} onSelect={drillInto} />}
+            </Phone>
+          </ScreenStage>
         )}
       </div>
 
@@ -134,7 +142,7 @@ function Phone({
 }) {
   const Screen = screenRenderers[screen];
   return (
-    <div className="stage relative h-[min(812px,calc(100dvh-110px))] w-[390px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[44px] bg-surface shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_80px_-30px_rgba(0,0,0,0.25),0_12px_24px_-12px_rgba(0,0,0,0.1)]">
+    <div className="stage relative h-[min(812px,calc(100dvh-110px))] w-[390px] max-w-[calc(100vw-32px)] overflow-hidden rounded-[44px] bg-screen shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_80px_-30px_rgba(0,0,0,0.25),0_12px_24px_-12px_rgba(0,0,0,0.1)]">
       <div
         ref={scroller}
         className="h-full overflow-y-auto overscroll-contain [scrollbar-width:none] [mask-image:linear-gradient(to_bottom,black_calc(100%-72px),transparent)]"
@@ -150,6 +158,80 @@ function Phone({
 // half of it so it stays centred in the space the panel leaves.
 const PANEL_SPACE = 356;
 
+/** A coded screen, with build mode's offer to work on a draft copy of it. */
+function ScreenStage({ screen, children }: { screen: string; children: ReactNode }) {
+  const { mode, setMode, navigate } = useShell();
+  const building = mode === "build";
+  const shift = useRef<HTMLDivElement>(null);
+  const meta = screenBySlug(screen);
+  const blocks = screenBlocks(screen);
+  const copies = useDrafts().filter((d) => d.source === screen);
+
+  useGSAP(
+    () => {
+      const room = building && window.innerWidth >= 1024;
+      gsap.to(shift.current, { x: room ? BUILD_PANEL_SPACE / 2 : 0, duration: 0.55, ease: "power3.inOut" });
+    },
+    { dependencies: [building], revertOnUpdate: false },
+  );
+
+  const copy = () => {
+    if (!blocks) return;
+    const draft = createDraft({
+      title: `${meta?.title ?? "Screen"} copy${copies.length ? ` ${copies.length + 1}` : ""}`,
+      blocks: blocks.map((b) => newBlock(b.slug, b.story)),
+      source: screen,
+    });
+    navigate(draftHref(draft.id), { mode: "build" });
+  };
+
+  return (
+    <>
+      <div ref={shift} className="flex w-full flex-col items-center">
+        {children}
+      </div>
+      {building && blocks && (
+        <BuildPanel>
+          <header className="flex h-[58px] shrink-0 items-center gap-1 border-b border-[var(--bar-ring)] pl-4 pr-2">
+            <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold">Build on a copy</h2>
+            <ClosePanelButton onClose={() => setMode("preview")} />
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <p className="px-1 text-[12.5px] leading-relaxed text-[var(--bar-muted)]">
+              {meta?.title ?? "This screen"} is coded, so it stays as it is. Make an editable copy to add, move and
+              edit its components. Copies are saved in this browser.
+            </p>
+            <button
+              type="button"
+              onClick={copy}
+              className="mt-3 w-full rounded-lg bg-[var(--bar-fg)] px-3 py-2 text-[12.5px] font-medium text-[var(--bar-bg)] transition-opacity hover:opacity-85"
+            >
+              Make an editable copy
+            </button>
+            {copies.length > 0 && (
+              <section className="mt-5">
+                <h3 className="mb-1.5 px-1 text-[11.5px] font-medium text-[var(--bar-muted)]">Your copies</h3>
+                <div className="flex flex-col">
+                  {copies.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => navigate(draftHref(d.id), { mode: "build" })}
+                      className="rounded-lg px-2 py-1.5 text-left text-[12.5px] transition-colors hover:bg-[var(--bar-thumb)]"
+                    >
+                      {d.title}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        </BuildPanel>
+      )}
+    </>
+  );
+}
+
 function ComponentStage({ screen, slug }: { screen: string; slug: string }) {
   const { navigate, mode, setMode } = useShell();
   const stories = componentStories[slug];
@@ -160,6 +242,9 @@ function ComponentStage({ screen, slug }: { screen: string; slug: string }) {
   const current = screenBySlug(screen);
 
   const commenting = mode === "comment";
+  const building = mode === "build";
+  const template = templateFor(slug, storyId);
+  const edits = useComponentArgs(slug, storyId ?? "");
   const comments = useComments(slug);
   const numbers = useMemo(() => new Map(comments.map((c, i) => [c.id, i + 1])), [comments]);
   const onStory = useMemo(() => comments.filter((c) => c.storyId === storyId), [comments, storyId]);
@@ -169,21 +254,25 @@ function ComponentStage({ screen, slug }: { screen: string; slug: string }) {
 
   useGSAP(
     () => {
-      const room = commenting && window.innerWidth >= 1024;
-      gsap.to(shift.current, { x: room ? -PANEL_SPACE / 2 : 0, duration: 0.55, ease: "power3.inOut" });
+      const wide = window.innerWidth >= 1024;
+      const x = !wide ? 0 : commenting ? -PANEL_SPACE / 2 : building ? BUILD_PANEL_SPACE / 2 : 0;
+      gsap.to(shift.current, { x, duration: 0.55, ease: "power3.inOut" });
     },
-    { dependencies: [commenting], revertOnUpdate: false },
+    { dependencies: [commenting, building], revertOnUpdate: false },
   );
 
   return (
     <>
       <div ref={shift} className="flex w-full flex-col items-center">
-        <div className="stage relative w-[390px] max-w-[calc(100vw-32px)] rounded-[32px] bg-surface p-3 shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_80px_-30px_rgba(0,0,0,0.25),0_12px_24px_-12px_rgba(0,0,0,0.1)]">
+        <div className="stage relative w-[390px] max-w-[calc(100vw-32px)] rounded-[32px] bg-screen p-5 shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_40px_80px_-30px_rgba(0,0,0,0.25),0_12px_24px_-12px_rgba(0,0,0,0.1)]">
           <span className="stage-chrome pointer-events-none absolute -top-6 left-4 font-mono text-[11px] text-[var(--bar-muted)]">
             {`<${meta.name} />`}
           </span>
           <div ref={content}>
-            <Demo />
+            {/* Edits made in build mode, over the story's own args. */}
+            <StoryArgs.Provider value={edits ?? null}>
+              <Demo />
+            </StoryArgs.Provider>
           </div>
           {commenting && (
             <CommentLayer
@@ -230,6 +319,16 @@ function ComponentStage({ screen, slug }: { screen: string; slug: string }) {
           </div>
         </div>
       </div>
+      {building && (
+        <ComponentArgsPanel
+          name={meta.name}
+          storyName={stories?.find((s) => s.id === storyId)?.name}
+          template={template}
+          edits={edits}
+          onEdits={(next) => (storyId ? setComponentArgs(slug, storyId, next) : undefined)}
+          onClose={() => setMode("preview")}
+        />
+      )}
       {commenting && (
         <CommentsPanel
           comments={comments}
@@ -243,5 +342,70 @@ function ComponentStage({ screen, slug }: { screen: string; slug: string }) {
         />
       )}
     </>
+  );
+}
+
+/** Build mode on a component's page: the current story's args, as fields. */
+function ComponentArgsPanel({
+  name,
+  storyName,
+  template,
+  edits,
+  onEdits,
+  onClose,
+}: {
+  name: string;
+  storyName: string | undefined;
+  template: ReturnType<typeof templateFor>;
+  edits: Args | undefined;
+  /** False when the browser couldn't store them. */
+  onEdits: (edits: Args | undefined) => boolean | undefined;
+  onClose: () => void;
+}) {
+  const [full, setFull] = useState(false);
+  const fields = template?.fields ?? [];
+  const save = (next: Args | undefined) => setFull(onEdits(next) === false);
+
+  return (
+    <BuildPanel>
+      <header className="flex h-[58px] shrink-0 items-center gap-1 border-b border-[var(--bar-ring)] pl-4 pr-2">
+        <h2 className="min-w-0 flex-1 truncate font-mono text-[13px] font-medium">{`<${name} />`}</h2>
+        <ClosePanelButton onClose={onClose} />
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {fields.length === 0 ? (
+          <p className="px-1 py-6 text-center text-[12.5px] leading-relaxed text-[var(--bar-muted)]">
+            This component has nothing to edit.
+          </p>
+        ) : (
+          <>
+            <p className="mb-3 px-1 text-[12px] leading-relaxed text-[var(--bar-muted)]">
+              {storyName ? `Editing the ${storyName} story. ` : ""}Changes are saved in this browser.
+            </p>
+            <ArgsEditor
+              fields={fields}
+              values={argsFor(template, edits)}
+              onChange={(key, value) => save(diffArgs(template, { ...edits, [key]: value }))}
+            />
+            {full && (
+              <p className="mt-3 px-1 text-[11.5px] leading-relaxed text-[#c9352b]">
+                This browser’s storage is full, so the last change won’t survive a reload. Try a smaller image.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+      {edits && (
+        <footer className="shrink-0 border-t border-[var(--bar-ring)] p-2">
+          <button
+            type="button"
+            onClick={() => save(undefined)}
+            className="w-full rounded-lg px-2 py-1.5 text-left text-[12.5px] text-[var(--bar-muted)] transition-colors hover:bg-[var(--bar-thumb)] hover:text-[var(--bar-fg)]"
+          >
+            Reset to the story’s defaults
+          </button>
+        </footer>
+      )}
+    </BuildPanel>
   );
 }

@@ -16,6 +16,18 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable} ${serif.variable} antialiased`}>
+      <head>
+        {/*
+          NBK's typography tokens name their face literally ("DM Sans"), and
+          react-native-web passes that name straight to CSS. next/font renames
+          the families it hosts, so NBK's fonts load from Google Fonts under
+          their real names instead. Weights are the tokens' regular and bold.
+        */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font -- see above: next/font can't keep the family name */}
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap" />
+      </head>
       <body>
         <NativeStyles>
           <Shell>{children}</Shell>
